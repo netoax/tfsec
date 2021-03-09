@@ -25,6 +25,28 @@ resource "aws_db_instance" "my-db-instance" {
 }
 `
 
+// https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/Overview.Encryption.html#Overview.Encryption.Availability
+var unavailableEncryptionInstances = []string{
+	"db.m1.small",
+	"db.m1.medium",
+	"db.m1.large",
+	"db.m1.xlarge",
+	"db.m2.xlarge",
+	"db.m2.2xlarge",
+	"db.m2.4xlarge",
+	"db.t2.micro",
+}
+
+func isEncryptableInstance(kind string) bool {
+	for _, i := range unavailableEncryptionInstances {
+		if kind == i {
+			return false
+		}
+	}
+
+	return true
+}
+
 func init() {
 	scanner.RegisterCheck(scanner.Check{
 		Code: AWSRDSEncryptionNotEnabled,
@@ -42,6 +64,11 @@ func init() {
 		RequiredTypes:  []string{"resource"},
 		RequiredLabels: []string{"aws_db_instance"},
 		CheckFunc: func(check *scanner.Check, block *parser.Block, _ *scanner.Context) []scanner.Result {
+
+			instanceClass := block.GetAttribute("instance_class")
+			if !isEncryptableInstance(instanceClass.Value().AsString()) {
+				return nil
+			}
 
 			if block.MissingChild("storage_encrypted") {
 				return []scanner.Result{
